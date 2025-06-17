@@ -5,55 +5,50 @@
 #include <Wire.h>
 #include <Arduino.h>
 #include "BluetoothManager.h"
+#include "SensorManager.h"
+
+// --- Detection thresholds ---
+#define MIN_THRESHOLD -30.0f      // Toe-off threshold (min gyroZ)
+#define POS_SWING_THRES +100.0f // Heel-strike zero crossing
 
 class AccelerometerHW123 {
 public:
+    // --- Constructor & Initialization ---
     AccelerometerHW123(uint8_t addr);
     bool begin();
+    bool isDataReady();
+
+    // --- Sensor Reading ---
     bool readAcceleration(float &ax, float &ay, float &az);
     bool readGyro(float &gyroX, float &gyroY, float &gyroZ);
-    bool isDataReady();
-    void printAcceleration();
-
-    // Step event detection logic
-    void updateShockState(float ax, float ay, float az, float gyroY);
-    void resetStates();
+    
+    // --- Step Detection ---
+    void updateShockState(float gyroY);
     void reset();
-    void resetEndTime();
 
-    // State getters
-    bool isFootRelaxed();
-    bool isStepStarted();
+    // --- State Getters ---
     bool hasEndTime();
     unsigned long getStartTime();
     unsigned long getEndTime();
-    unsigned long getDefStartTime();
 
+    // --- Integration ---
     void setBluetoothManager(BluetoothManager &btMgr);
-
+    void setSensorManager(SensorManager &snsMgr);
 
 private:
-    uint8_t _addr;
-
+    // --- Low-level Register I/O ---
     void writeRegister(uint8_t reg, uint8_t value);
     uint8_t readRegister(uint8_t reg);
 
-    void checkShock(float ax, float ay, float az, float &totalAccel, float &avgAccel);
+    // --- Device Address ---
+    uint8_t _addr;
 
-    // Step detection state
-    unsigned long startTime = 0;
-    unsigned long endTime = 0;
-    unsigned long defStartTime = 0;
-    bool stepStarted = false;
-    bool endDetected = false;
-    bool footRelaxed = false;
+    // --- State Variables ---
+    static unsigned long startTime;
+    static unsigned long endTime;
 
-    // Gyro-based detection state
-    float lastGyroY = 0.0f;
-    float minGyroY = 0.0f;
-    unsigned long minGyroYTime = 0;
+    // --- External Managers ---
     BluetoothManager* bleManager = nullptr;
-
+    SensorManager* sensorManager = nullptr;
 };
-
 #endif

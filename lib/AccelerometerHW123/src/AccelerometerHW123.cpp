@@ -1,10 +1,23 @@
 #include "AccelerometerHW123.h"
 
-#define STEP_START_THRESHOLD_GZ -40.0f      // Toe-off threshold (min gyroZ)
-#define STEP_END_THRESHOLD_GZ_CROSSING 0.0f // Heel-strike zero crossing
 
+
+unsigned long AccelerometerHW123::startTime = 0;
+unsigned long AccelerometerHW123::endTime = 0;
+/**
+ * @brief Constructor that sets the I2C address of the MPU6050.
+ *
+ * @param addr I2C address of the accelerometer/gyroscope.
+ */
 AccelerometerHW123::AccelerometerHW123(uint8_t addr) : _addr(addr) {}
 
+/**
+ * @brief Initializes the MPU6050 sensor.
+ *
+ * This function sets up the I2C communication, wakes up the sensor, and checks if the sensor is connected.
+ *
+ * @return true if the sensor is initialized successfully, false otherwise.
+ */
 bool AccelerometerHW123::begin()
 {
     Wire.begin();
@@ -16,6 +29,16 @@ bool AccelerometerHW123::begin()
     return id == 0x68;
 }
 
+/**
+ * @brief Reads acceleration data from the MPU6050.
+ *
+ * This function reads the raw acceleration values from the sensor and converts them to g's.
+ *
+ * @param ax Reference to store the X-axis acceleration in g's.
+ * @param ay Reference to store the Y-axis acceleration in g's.
+ * @param az Reference to store the Z-axis acceleration in g's.
+ * @return true if the data is read successfully, false otherwise.
+ */
 bool AccelerometerHW123::readAcceleration(float &ax, float &ay, float &az)
 {
     Wire.beginTransmission(_addr);
@@ -34,6 +57,16 @@ bool AccelerometerHW123::readAcceleration(float &ax, float &ay, float &az)
     return true;
 }
 
+/**
+ * @brief Reads gyroscope data from the MPU6050.
+ *
+ * This function reads the raw gyroscope values from the sensor and converts them to degrees per second.
+ *
+ * @param gx Reference to store the X-axis gyro value in degrees per second.
+ * @param gy Reference to store the Y-axis gyro value in degrees per second.
+ * @param gz Reference to store the Z-axis gyro value in degrees per second.
+ * @return true if the data is read successfully, false otherwise.
+ */
 bool AccelerometerHW123::readGyro(float &gx, float &gy, float &gz)
 {
     Wire.beginTransmission(_addr);
@@ -52,11 +85,24 @@ bool AccelerometerHW123::readGyro(float &gx, float &gy, float &gz)
     return true;
 }
 
+/**
+ * @brief Checks if new data is available from the MPU6050.
+ *
+ * This function checks the Data Ready bit in the MPU6050 status register.
+ *
+ * @return true if new data is ready, false otherwise.
+ */
 bool AccelerometerHW123::isDataReady()
 {
     return (readRegister(0x3A) & 0x01);
 }
 
+/**
+ * @brief Writes a value to a specific register on the MPU6050.
+ *
+ * @param reg Register address to write to.
+ * @param value Byte value to write.
+ */
 void AccelerometerHW123::writeRegister(uint8_t reg, uint8_t value)
 {
     Wire.beginTransmission(_addr);
@@ -65,6 +111,12 @@ void AccelerometerHW123::writeRegister(uint8_t reg, uint8_t value)
     Wire.endTransmission(true);
 }
 
+/**
+ * @brief Reads a value from a specific register on the MPU6050.
+ *
+ * @param reg Register address to read from.
+ * @return Byte value read from the register.
+ */
 uint8_t AccelerometerHW123::readRegister(uint8_t reg)
 {
     Wire.beginTransmission(_addr);
@@ -76,142 +128,109 @@ uint8_t AccelerometerHW123::readRegister(uint8_t reg)
     return 0;
 }
 
-void AccelerometerHW123::checkShock(float ax, float ay, float az, float &totalAccel, float &avgAccel)
+/**
+ * @brief Updates the shock state based on the gyroscope X-axis data.
+ *
+ * This function implements a moving average smoother and detects step start and end events based on gyroscope data.
+ *
+ * @param gyroX The X-axis gyroscope value in degrees per second.
+ */
+void AccelerometerHW123::updateShockState(float gyroX)
 {
-    static const int windowSize = 4;
-    static float window[windowSize] = {0};
-    static int index = 0;
-    static bool windowFilled = false;
-    totalAccel = sqrt(ax * ax + ay * ay + (az + 1) * (az + 1));
-    window[index] = totalAccel;
-    index = (index + 1) % windowSize;
-    if (index == 0)
-        windowFilled = true;
-    avgAccel = windowFilled ? (window[0] + window[1] + window[2] + window[3]) / 4.0 : totalAccel;
-}
+    /* ---------- 0.  Moving‑average smoother -------------------- */
+    const int SMOOTH_WINDOW = 10; // tune as needed
+    static float smoothBuf[SMOOTH_WINDOW] = {0};
+    static int smoothIdx = 0;
+    static float smoothSum = 0;
 
-static int callCounter = 0;
+    smoothSum -= smoothBuf[smoothIdx];
+    smoothBuf[smoothIdx] = gyroX;
+    smoothSum += gyroX;
+    smoothIdx = (smoothIdx + 1) % SMOOTH_WINDOW;
+    float smoothedGyro = smoothSum / SMOOTH_WINDOW;
 
-void AccelerometerHW123::updateShockState(float ax, float ay, float az, float gyroX)
-{
-    static float accelBuffer[4] = {0};
-    static int accelIndex = 0;
-    static float lastGyroX = 0;
-    static bool waitingForNextMin = true;
+    /* ---------- 1.  Persistent state & thresholds -------------- */
+    static float lastGyroX = 0.0f;     // last *smoothed* value
+    static bool wasFalling = false;    // slope tracker
+    static bool positiveSwing = false; // > +50 °/s flag
 
-    static float lastMinGyro = 0;
-    static unsigned long minGyroTime = 0;
-
-    static bool lastWasEnd = true;
-
-    static unsigned long lastEventTime = 0; // Time of last start or end
-
-    float totalAccel = sqrt(ax * ax + ay * ay + az * az);
-
-    accelBuffer[accelIndex] = totalAccel;
-    accelIndex = (accelIndex + 1) % 4;
-
-    float avgAccel = 0;
-    for (int i = 0; i < 4; i++)
-        avgAccel += accelBuffer[i];
-    avgAccel /= 4.0;
-
+    char logBuffer[100];
     unsigned long now = micros();
 
-    // --- Detect minimum in gyroX ---
-    if (gyroX < -150 && waitingForNextMin && gyroX < lastGyroX)
-    {
-        lastMinGyro = gyroX;
-        minGyroTime = now;
-    }
+    /* ---------- 2.  Positive‑swing detection (raw) ------------- */
+    if (gyroX > POS_SWING_THRES)
+        positiveSwing = true;
 
-    // --- Step detection on upward slope ---
-    if (waitingForNextMin && lastGyroX < gyroX && lastMinGyro < -150)
+    /* ---------- 3.  Minimum detection (smoothed) --------------- */
+    bool isRising = smoothedGyro > lastGyroX;
+    if (wasFalling && isRising && lastGyroX < MIN_THRESHOLD)
     {
-        char logBuffer[100];
+        if (positiveSwing) // → Step End
+        {
+            endTime = now;
 
-        Serial.println("Min slope detected, checking for the event");
-        // --- Timeout force start ---
-        if (now - lastEventTime > 2e6)
+            snprintf(logBuffer, sizeof(logBuffer),
+                     "🛑 Step End at %.6f s, smoothed valley %.1f °/s",
+                     endTime / 1e6, lastGyroX);
+        }
+        else if (now - endTime > 500000) // → Step Start
         {
             startTime = now;
-            lastEventTime = now;
-            lastWasEnd = false;
-            waitingForNextMin = false; // Prevent overlap with normal detection
-            snprintf(logBuffer, sizeof(logBuffer), "⏱️🟢 Step Start (timeout) at %.6f s (%lu µs)\n", startTime / 1e6, startTime);
-            Serial.println(logBuffer);
-            // bleManager->sendLog(logBuffer);
+            if (sensorManager)
+                sensorManager->reset();
+
+            snprintf(logBuffer, sizeof(logBuffer),
+                     "🟢 Step Start at %.6f s, smoothed valley %.1f °/s",
+                     startTime / 1e6, lastGyroX);
         }
 
-        else if (avgAccel > 1.75)
-        {
-            endTime = minGyroTime;
-            endDetected = true;
-            lastWasEnd = true;
-            lastEventTime = endTime;
-            snprintf(logBuffer, sizeof(logBuffer), "🛑 Step End (forced) at %.6f s (%lu µs), AccelAvg: %.2f\n", endTime / 1e6, endTime, avgAccel);
-            Serial.println(logBuffer);
-            // bleManager->sendLog(logBuffer);
-        }
-        else if (lastWasEnd)
-        {
-            startTime = minGyroTime;
-            lastWasEnd = false;
-            lastEventTime = startTime;
-            Serial.printf("🟢 Step Start at %.6f s (%lu µs), AccelAvg: %.2f\n", startTime / 1e6, startTime, avgAccel);
-        }
-        else
-        {
-            endTime = minGyroTime;
-            endDetected = true;
-            lastWasEnd = true;
-            lastEventTime = endTime;
-            snprintf(logBuffer, sizeof(logBuffer), "🛑 Step End at %.6f s (%lu µs), AccelAvg: %.2f\n", endTime / 1e6, endTime, avgAccel);
-            Serial.println(logBuffer);
-            // bleManager->sendLog(logBuffer);
-        }
+        // Serial.println(logBuffer);
+        // if (bleManager) bleManager->sendLog(logBuffer);
 
-        waitingForNextMin = false;
+        /* reset for next cycle */
+        positiveSwing = false;
     }
 
-    if (gyroX > -150)
-    {
-        waitingForNextMin = true;
-        lastMinGyro = 0;
-    }
-
-    lastGyroX = gyroX;
+    /* ---------- 4.  Prepare for next sample -------------------- */
+    wasFalling = (smoothedGyro < lastGyroX); // still descending?
+    lastGyroX = smoothedGyro;
 }
 
-bool AccelerometerHW123::isFootRelaxed() { return footRelaxed; }
-bool AccelerometerHW123::isStepStarted() { return stepStarted; }
-bool AccelerometerHW123::hasEndTime() { return endDetected; }
-unsigned long AccelerometerHW123::getStartTime() { return startTime; }
-unsigned long AccelerometerHW123::getEndTime() { return endTime; }
-unsigned long AccelerometerHW123::getDefStartTime() { return defStartTime; }
 
-void AccelerometerHW123::resetStates()
-{
-    stepStarted = false;
-    endDetected = false;
-    footRelaxed = false;
-    minGyroY = 0;
-    lastGyroY = 0;
-}
-
+/**
+ * @brief Resets the step detection states and timestamps.
+ *
+ * This function resets the start and end times, and clears the step detection states.
+ */
 void AccelerometerHW123::reset()
 {
     startTime = 0;
     endTime = 0;
-    resetStates();
 }
 
-void AccelerometerHW123::resetEndTime()
-{
-    endDetected = false;
-}
-
+/**
+ * @brief Sets the Bluetooth manager for sending data.
+ *
+ * This function allows the accelerometer to send data through the Bluetooth manager.
+ *
+ * @param btMgr Reference to the BluetoothManager instance.
+ */
 void AccelerometerHW123::setBluetoothManager(BluetoothManager &btMgr)
 {
     bleManager = &btMgr;
 }
+
+/**
+ * @brief Sets the sensor manager for managing sensor data.
+ *
+ * This function allows the accelerometer to interact with the SensorManager instance.
+ *
+ * @param snsMgr Reference to the SensorManager instance.
+ */
+void AccelerometerHW123::setSensorManager(SensorManager &snsMgr)
+{
+    sensorManager = &snsMgr;
+}
+
+unsigned long AccelerometerHW123::getStartTime() { return startTime; }
+unsigned long AccelerometerHW123::getEndTime() { return endTime; }

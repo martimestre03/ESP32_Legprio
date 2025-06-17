@@ -7,32 +7,38 @@
 
 class SensorManager {
 public:
+    // --- Core Logic ---
     void init();
     void checkSensors();
     bool shouldProcessData();
     std::tuple<unsigned long*, double*>  collectData(std::vector<double> &timeData, std::vector<double> &positionData);
     void reset();
+
+    // --- Output ---
     void plotResults();
-    int getDegree();
-    unsigned long getFirstSensorTime();
+
+    // --- State Access ---
     unsigned long getCentralSensorTime();
-    unsigned long getLastSensorTime();
     unsigned long getLastTriggerTime();
     bool getImportantSensorsTriggered();
+
+    // --- External Modules --
     void setBluetoothManager(BluetoothManager &btMgr);
 
 private:
+    // --- Sensor Config ---
     static const int numSensors = 9;
     static const int sensorPins[numSensors];
     static const double sensorSpacing;
     
+    // --- Internal State ---
     unsigned long timestamps[numSensors] = {0};
     bool triggered[numSensors] = {false};
-    volatile unsigned long firstSensorTime = 0;
     volatile unsigned long centralSensorTime = 0;
-    volatile unsigned long lastSensorTime = 0;
     volatile unsigned long lastTriggerTime = 0;
     int expectedSensor = 0;
+
+    // --- External Modules --
     BluetoothManager* bleManager = nullptr;
 };
 

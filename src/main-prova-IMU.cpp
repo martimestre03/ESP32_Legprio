@@ -15,7 +15,7 @@
 //     while (1);
 //   }
 
-//   Serial.println("millis,gx,gy,gz,ax,ay,az,stepStarted,endDetected,footRelaxed,button");
+//   Serial.println("millis,gx,gy,gz,ax,ay,az,button");
 // }
 
 // void loop() {
@@ -28,13 +28,10 @@
 
 //       imu.updateShockState(ax, ay, az, gx);
 
-//       Serial.printf("%lu,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%d,%d,%d,%d\n",
+//       Serial.printf("%lu,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%d\n",
 //         millis(),
 //         gx, gy, gz,
 //         ax, ay, az,
-//         imu.isStepStarted() ? 1 : 0,
-//         imu.hasEndTime() ? 1 : 0,
-//         imu.isFootRelaxed() ? 1 : 0,
 //         buttonPressed
 //       );
 //     }

@@ -4,6 +4,9 @@ const int SensorManager::sensorPins[numSensors] = {13, 12, 14, 26, 27, 25, 33, 3
 const double positions[9] = {-218.5, -109.2, -72.8, -36.4, 0, 36.4, 72.8, 109.2, 218.5};
 const double SensorManager::sensorSpacing = 3.6; // centimeters between sensors
 
+/**
+ * @brief Initializes all sensor pins as input with pulldown.
+ */
 void SensorManager::init()
 {
     for (int i = 0; i < numSensors; i++)
@@ -12,11 +15,9 @@ void SensorManager::init()
     }
 }
 
-void SensorManager::setBluetoothManager(BluetoothManager &btMgr)
-{
-    this->bleManager = &btMgr;
-}
-
+/**
+ * @brief Monitors sensors and timestamps when each one is triggered.
+ */
 void SensorManager::checkSensors()
 {
     if (bleManager == nullptr)
@@ -34,32 +35,30 @@ void SensorManager::checkSensors()
             timestamps[i] = currentTime;
             triggered[i] = true;
 
-            if (i == 0)
-            {
-                firstSensorTime = currentTime;
-            }
 
-            else if (i == 4)
+            if (i == 4)
             {
                 centralSensorTime = currentTime;
             }
-            else if (i == 8)
-            {
-                lastSensorTime = currentTime;
-            }
+          
 
             lastTriggerTime = currentTime;
             expectedSensor = i + 1;
 
             // char logBuffer[100];
             // snprintf(logBuffer, sizeof(logBuffer), "🔍 Sensor %d triggered at: %.6f s",
-            //         i, (currentTime - firstSensorTime) / 1.0e6);
+            //          i, (currentTime) / 1.0e6);
+            // Serial.println(logBuffer);
+
             // bleManager->sendLog(logBuffer);
         }
         lastSensorStates[i] = currentSensorState;
     }
 }
 
+/**
+ * @brief Returns true if enough conditions are met to process the step data.
+ */
 bool SensorManager::shouldProcessData()
 {
     if (bleManager == nullptr)
@@ -67,17 +66,20 @@ bool SensorManager::shouldProcessData()
 
     if ((micros() - lastTriggerTime) > 1000000 && expectedSensor > 0)
     {
-        bleManager->sendLog("✅ Condition 1: Timeout exceeded and partial trigger detected.");
+        // bleManager->sendLog("✅ Condition 1: Timeout exceeded and partial trigger detected.");
         return true;
     }
     else if (getImportantSensorsTriggered())
     {
-        bleManager->sendLog("✅ Condition 2: All required sensors triggered.");
+        // bleManager->sendLog("✅ Condition 2: All required sensors triggered.");
         return true;
     }
     return false;
 }
 
+/**
+ * @brief Collects time and position data from triggered sensors.
+ */
 std::tuple<unsigned long *, double *> SensorManager::collectData(std::vector<double> &timeData, std::vector<double> &positionData)
 {
     // Fill the vectors with triggered sensor data
@@ -94,34 +96,39 @@ std::tuple<unsigned long *, double *> SensorManager::collectData(std::vector<dou
     return std::make_tuple(timestamps, (double *)positions);
 }
 
+/**
+ * @brief Displays a summary of triggered sensor data.
+ */
 void SensorManager::plotResults()
 {
     if (bleManager == nullptr)
         return;
 
-    bleManager->sendLog("\n📍 Final Sensor Data (Recap):");
-    bleManager->sendLog("────────────────────────────────────────────");
-    bleManager->sendLog("📍 Sensor |   Time (s)   |  Position (cm)");
-    bleManager->sendLog("────────────────────────────────────────────");
+    String output;
+    output += "\n📍 Final Sensor Data (Recap):\n";
+    output += "📍 Sens.\t| Time(s)\t| Position(mm)\n";
 
-    Serial.println("\n📍 Final Sensor Data (Recap):");
-    Serial.println("────────────────────────────────────────────");
-    Serial.println("📍 Sensor |   Time (s)   |  Position (cm)");
-    Serial.println("────────────────────────────────────────────");
-
-    char logBuffer[100];
     for (int i = 0; i < numSensors; i++)
     {
         if (triggered[i])
         {
-            snprintf(logBuffer, sizeof(logBuffer), "   %d      |   %+9.6f  |   %+7.2f",
+            char line[100];
+            snprintf(line, sizeof(line), " %d\t| %+9.3f\t| %+7.2f\n",
                      i, ((double)timestamps[i] - (double)centralSensorTime) / 1.0e6, positions[i]);
-            Serial.println(logBuffer);
-            bleManager->sendLog(logBuffer);
+            output += line;
         }
     }
+
+    // Send to Serial
+    // Serial.print(output);
+
+    // Send to BLE
+    // bleManager->sendLog(output.c_str());
 }
 
+/**
+ * @brief Resets internal sensor state and timestamps.
+ */
 void SensorManager::reset()
 {
     for (int i = 0; i < numSensors; i++)
@@ -130,37 +137,37 @@ void SensorManager::reset()
         triggered[i] = false;
     }
     expectedSensor = 0;
-    firstSensorTime = 0;
     lastTriggerTime = 0;
-    lastSensorTime = 0;
 }
 
-int SensorManager::getDegree()
-{
-    return 4;
-}
-
-unsigned long SensorManager::getFirstSensorTime()
-{
-    return firstSensorTime;
-}
-
+/**
+ * @brief Returns timestamp of the central sensor (index 4).
+ */
 unsigned long SensorManager::getCentralSensorTime()
 {
     return centralSensorTime;
 }
 
-unsigned long SensorManager::getLastSensorTime()
-{
-    return lastSensorTime;
-}
-
+/**
+ * @brief Returns the timestamp of the most recently triggered sensor.
+ */
 unsigned long SensorManager::getLastTriggerTime()
 {
     return lastTriggerTime;
 }
 
+/**
+ * @brief Checks if the first, central, and last sensor groups were triggered.
+ */
 bool SensorManager::getImportantSensorsTriggered()
 {
-    return triggered[4] && (triggered[5] || triggered[6] || triggered[7] || triggered[8]) && (triggered[0] || triggered[1] || triggered[2] || triggered[3] ); // Check if the first, middle, and last sensors are triggered
+    return triggered[4] && (triggered[5] || triggered[6] || triggered[7] || triggered[8]) && (triggered[0] || triggered[1] || triggered[2] || triggered[3]); // Check if the first, middle, and last sensors are triggered
+}
+
+/**
+ * @brief Links the BluetoothManager for optional logging.
+ */
+void SensorManager::setBluetoothManager(BluetoothManager &btMgr)
+{
+    this->bleManager = &btMgr;
 }

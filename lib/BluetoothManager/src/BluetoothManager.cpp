@@ -2,6 +2,12 @@
 #include "esp_bt.h"
 #include "driver/rtc_io.h"
 
+/**
+ * @brief Configures and starts the BLE server, service, characteristics, and advertising.
+ * 
+ * Called internally by init(). Creates the BLE service and two characteristics: one for data and one for logs.
+ * Sets up notification descriptors and defines advertising parameters.
+ */
 void BluetoothManager::setupServer()
 {
     // Create the BLE Server
@@ -39,6 +45,11 @@ void BluetoothManager::setupServer()
     startAdvertising();
 }
 
+/**
+ * @brief Initializes the BLE device and sets up the server.
+ * 
+ * @param deviceName The BLE name to be advertised.
+ */
 void BluetoothManager::init(const char *deviceName)
 {
 
@@ -49,21 +60,36 @@ void BluetoothManager::init(const char *deviceName)
     setupServer();
 }
 
+/**
+ * @brief Starts advertising the BLE service if not already advertising.
+ * 
+ * Ensures the ESP32 is discoverable by BLE clients when needed.
+ */
 void BluetoothManager::startAdvertising()
 {
     if (!isAdvertising)
     {
         BLEDevice::startAdvertising();
         isAdvertising = true;
-        Serial.println("📡 Advertising started.");
+        // Serial.println("📡 Advertising started.");
     }
     else
     {
-        Serial.println("ℹ️ Already advertising.");
+        // Serial.println("ℹ️ Already advertising.");
     }
 }
 
-void BluetoothManager::sendData(double position, double buttonTime, double startTime, double endTime)
+/**
+ * @brief Sends formatted sensor data over BLE as a JSON string.
+ * 
+ * @param positionError Distance value or inferred position.
+ * @param timeError Timestamp of button press. As time 0 is the crossing, buttonTime is timing error.
+ * @param startTime Timestamp when IMU detected start of the step.
+ * @param endTime Timestamp when IMU detected end of the step.
+ * 
+ * If no device is connected, the function will trigger advertising instead.
+ */
+void BluetoothManager::sendData(double positionError, double timeError, double startTime, double endTime)
 {
     if (!deviceConnected)
     {
@@ -73,16 +99,22 @@ void BluetoothManager::sendData(double position, double buttonTime, double start
     }
 
     // Format data as JSON with minimal precision to reduce packet size
-    char jsonData[100];
+    char jsonData[150]; // aumenta un poco el tamaño para evitar overflow
     snprintf(jsonData, sizeof(jsonData),
-             "{\"p\":%.1f,\"b\":%.3f,\"s\":%.3f,\"e\":%.3f}",
-             position, buttonTime, startTime, endTime);
+             "{\"t\":%lu,\"p\":%.1f,\"b\":%.3f,\"s\":%.3f,\"e\":%.3f}",
+             micros(), positionError, timeError, startTime, endTime);
 
-    // Add delay between transmissions
     pCharacteristic->setValue(jsonData);
     pCharacteristic->notify();
 }
 
+/**
+ * @brief Sends a timestamped log message over BLE. This was used as a debugging tool to have a terminal-like output in the app.
+ * 
+ * @param message The message to send.
+ * 
+ * If no device is connected, the message is discarded.
+ */
 void BluetoothManager::sendLog(const char *message)
 {
     if (!deviceConnected)
@@ -103,23 +135,33 @@ void BluetoothManager::sendLog(const char *message)
     pLogCharacteristic->notify();
 }
 
+/**
+ * @brief Callback triggered when a device connects to the BLE server.
+ * 
+ * Increments the connection count and stops advertising if the maximum number of connections is reached.
+ */
 void BluetoothManager::onConnect()
 {
     deviceConnected = true;
     connectedCount++;
-    Serial.printf("🔗 Device connected. Total connections: %d\n", connectedCount);
+    // Serial.printf("🔗 Device connected. Total connections: %d\n", connectedCount);
 
     if (connectedCount >= MAX_CONNECTIONS)
     {
         BLEDevice::stopAdvertising();
         isAdvertising = false;
-        Serial.println("🛑 Stopped advertising (max connections reached).");
+        // Serial.println("🛑 Stopped advertising (max connections reached).");
     }
 }
 
+/**
+ * @brief Callback triggered when a device disconnects from the BLE server.
+ * 
+ * Decrements the connection count and restarts advertising if below the maximum allowed connections.
+ */
 void BluetoothManager::onDisconnect()
 {
-    Serial.printf("❌ Device disconnected. Connections before decrement: %d\n", connectedCount);
+    // Serial.printf("❌ Device disconnected. Connections before decrement: %d\n", connectedCount);
 
     if (connectedCount > 0)
     {
@@ -129,21 +171,31 @@ void BluetoothManager::onDisconnect()
     deviceConnected = connectedCount > 0;
     isAdvertising = false;
 
-    Serial.printf("🔁 Remaining connections: %d | Advertising status: %s\n", connectedCount, isAdvertising ? "YES" : "NO");
+    // Serial.printf("🔁 Remaining connections: %d | Advertising status: %s\n", connectedCount, isAdvertising ? "YES" : "NO");
 
     if (connectedCount < MAX_CONNECTIONS)
     {
         delay(500);
-        Serial.println("🔃 Restarting advertising from onDisconnect...");
+        // Serial.println("🔃 Restarting advertising from onDisconnect...");
         startAdvertising();
     }
 }
 
+/**
+ * @brief Checks if at least one device is currently connected.
+ * 
+ * @return true if connected, false otherwise.
+ */
 bool BluetoothManager::isConnected() const
 {
     return deviceConnected;
 }
 
+/**
+ * @brief Checks if the ESP32 is currently advertising its BLE service.
+ * 
+ * @return true if advertising, false otherwise.
+ */
 bool BluetoothManager::isCurrentlyAdvertising() const
 {
     return isAdvertising;
