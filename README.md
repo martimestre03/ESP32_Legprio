@@ -53,3 +53,51 @@ LegPrio/
 ```bash
 git clone https://github.com/your-username/LegPrio.git
 cd LegPrio
+
+3.Connect your ESP32 via USB
+4.Upload the firmware:
+
+```bash
+pio run --target upload
+---
+
+## 📡 BLE Output Format
+Sensor data is sent over BLE in JSON format like this:
+
+{
+  "t": 12345678,
+  "p": -36.4,
+  "b": 0.253,
+  "s": 0.230,
+  "e": 0.310
+}
+Key	Meaning
+-t	Absolute timestamp in microseconds
+-p	Position at button press
+-b	Button time relative to central sensor
+-s	Step start time (relative)
+-e	Step end time (relative)
+---
+
+## 📈 Example Use Case
+Strap the device around the legs with beam sensors aligned across the gait path
+
+Start walking naturally
+
+Press the button when you feel your legs are crossing
+
+Data is streamed via BLE to the host
+
+Use the collected timestamps and fitted positions to analyze proprioception delay
+
+---
+
+## 👨‍🔬 Contributors
+Martí Mestre — Concept, hardware, firmware, validation
+
+Supervisors: Prof. Ramon Bragós (UPC), Prof. David Reinkensmeyer (UCI)
+---
+
+## 📄 License
+This project is licensed under the MIT License.
+See the LICENSE file for more details.
