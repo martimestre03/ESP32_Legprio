@@ -28,18 +28,20 @@ It communicates with a host device via **Bluetooth Low Energy (BLE)**.
 ---
 
 ## 📁 Folder Structure
+
+```bash
 LegPrio/
-├── lib/ # Custom modules
-│ ├── AccelerometerHW123/
-│ ├── BluetoothManager/
-│ ├── ButtonHandler/
-│ ├── PolynomialFit/
-│ └── SensorManager/
+├── lib/                    # Custom modules
+│   ├── AccelerometerHW123/
+│   ├── BluetoothManager/
+│   ├── ButtonHandler/
+│   ├── PolynomialFit/
+│   └── SensorManager/
 ├── src/
-│ ├── main.cpp # Main firmware
-│ └── main-prova-IMU.cpp # Optional IMU test
-├── platformio.ini # PlatformIO configuration
-└── README.md # Project documentation
+│   ├── main.cpp            # Main firmware
+│   └── main-prova-IMU.cpp  # Optional IMU test
+├── platformio.ini          # PlatformIO configuration
+└── README.md               # Project documentation
 
 ---
 
