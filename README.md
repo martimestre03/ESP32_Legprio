@@ -20,7 +20,7 @@ It communicates with a host device via **Bluetooth Low Energy (BLE)**.
 ## ⚙️ Hardware
 
 - ESP32 (Dev Module)  
-- 9x Pololu Digital Distance Sensors (`#4067`)  
+- 9x Pololu Digital Distance Sensors (`#4067`)  A
 - MPU6050 IMU (I2C)  
 - Push button for user marking  
 - BLE-connected smartphone or computer for receiving data  
@@ -42,7 +42,7 @@ LegPrio/
 │   └── main-prova-IMU.cpp  # Optional IMU test
 ├── platformio.ini          # PlatformIO configuration
 └── README.md               # Project documentation
-
+```
 ---
 
 ## 🚀 Getting Started
