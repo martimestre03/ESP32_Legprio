@@ -52,7 +52,7 @@ LegPrio/
 
 ```bash
 git clone https://github.com/martimestre03/ESP32_Legprio.git
-cd LegPrio
+cd ESP32_Legprio
 ```
 3.Connect your ESP32 via USB
 4.Upload the firmware:
