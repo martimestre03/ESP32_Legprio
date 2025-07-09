@@ -47,15 +47,19 @@ LegPrio/
 
 ## 🚀 Getting Started
 
-1. **Install [PlatformIO](https://platformio.org/)** (VSCode recommended)  
-2. Clone this repository:
+1. **Install VSCode (https://code.visualstudio.com/download)**
+2. **Install de PlatformIO in VSCode extensions (https://platformio.org/)**
+3. **Install git (https://git-scm.com/downloads/win) and run the download**
+4. Open VSCode and a terminal whetever you want the project to be
+6. Clone this repository:
 
 ```bash
 git clone https://github.com/martimestre03/ESP32_Legprio.git
 cd ESP32_Legprio
 ```
-3.Connect your ESP32 via USB
-4.Upload the firmware:
+7. Go to File > Open Folder > Select "ESP32_Legprio"
+8.Connect your ESP32 via USB
+9.Upload the firmware:
 
 ```bash
 pio run --target upload
