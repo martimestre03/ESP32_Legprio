@@ -50,7 +50,8 @@ LegPrio/
 1. **Install VSCode (https://code.visualstudio.com/download)**
 2. **Install de PlatformIO in VSCode extensions (https://platformio.org/)**
 3. **Install git (https://git-scm.com/downloads/win) and run the download**
-4. Open VSCode and a terminal whetever you want the project to be
+4. Install driver to communicate via USB (https://www.silabs.com/developer-tools/usb-to-uart-bridge-vcp-drivers?tab=downloads)
+5. Open VSCode and a terminal whetever you want the project to be
 6. Clone this repository:
 
 ```bash
